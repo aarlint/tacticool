@@ -1,22 +1,15 @@
 import Vue from 'vue'
 import App from './App.vue'
-import SocketIO from "socket.io-client"
-import VueSocketIO from 'vue-socket.io';
-import store from './store'
+import VueSocketIOExt from 'vue-socket.io-extended';
+import io from 'socket.io-client';
 
-Vue.use(new VueSocketIO({
-  debug: true,
-  connection: SocketIO('http://10.3.141.1:3000'), //options object is Optional
-  vuex: {
-    store,
-    actionPrefix: 'SOCKET_'
-  },
-})
-);
+const socket = io('http://192.168.178.119:3000');
+ 
+Vue.use(VueSocketIOExt, socket);
 
 Vue.config.productionTip = false
 
 new Vue({
-  store,
+  // store,
   render: h => h(App),
 }).$mount('#app')

@@ -1,135 +1,94 @@
 <template>
-  <div class="container">
+
     <div class="row">
-      <div class="col-md-9">
+      <div class="col-md-10">
         <div id="map" class="map"></div>
       </div>
-      <div class="col-md-3">
-        <div class="form-check" v-for="layer in layers" :key="layer.id">
-          <label class="form-check-label">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              v-model="layer.active"
-              @change="layerChanged(layer.id, layer.active)"
-            />
-            {{ layer.name }}
-          </label>
-        </div>
+      <div class="col-md-2">
+      <input class="form-control" type="text" id="name" name="name" v-model="setName" placeholder="Type a short name"
+       minlength="2" maxlength="8" size="10"> 
+       <button :disabled="name" type="button" @click="name = setName" class="btn btn-dark btn-lg btn-block">Set Name</button>
       </div>
     </div>
-  </div>
+
 </template>
 
 <script>
+import Leaflet from 'leaflet';
 export default {
   name: "Map",
   data: function() {
     return {
+      name: null,
       map: null,
+      setName: null,
+      myLocation: {
+        lat: null,
+        lng: null
+      },
       tileLayer: null,
-      layers: [
-        {
-          id: 0,
-          name: "Players",
-          active: false,
-          features: [
-            {
-              id: 0,
-              name: "Austin",
-              type: "marker",
-              coords: [52.428064, 14.35187]
-            },
-            {
-              id: 1,
-              name: "Moe",
-              type: "marker",
-              coords: [52.428064, 14.354187]
-            }
-          ]
-        },
-        {
-          id: 1,
-          name: "Boundaries",
-          active: false,
-          features: [
-            {
-              id: 1,
-              name: "Boundry",
-              type: "polygon",
-              coords: [
-                [52.427224, 14.350388],
-                [52.426645, 14.358552],
-                [52.428806, 14.358797],
-                [52.429152, 14.354924],
-                [52.428419, 14.354214],
-                [52.428865, 14.352132],
-                [52.427224, 14.350388]
-              ]
-            }
-          ]
-        }
-      ]
+      players: {
+      }
     };
-  },
-  sockets: function() {return {
-    connect: function() {
+  },  
+  watch: {
+    players(newPlayers,oldPlayers) {
+      console.log(newPlayers,oldPlayers);
+    }
+    },
+  sockets: {
+    connect() {
       console.log("socket connected");
     },
-    customEmit: function(data) {
-      console.log(
-        'this method was fired by the socket server. eg: io.emit("customEmit", data)'
-      );
+    location(players) {
+      console.log(players)
+      for (let player in players) {
+        if (player in this.players) {
+          let latlng = Leaflet.latLng(players[player].coords)
+          this.players[player].leafletObject.setLatLng(latlng)
+        }
+        else {
+          this.players[player] = players[player]
+          this.players[player]["leafletObject"] = Leaflet.marker(this.players[player]["coords"]).bindPopup(
+            player
+          );
+          this.players[player].leafletObject.addTo(this.map);
+        }
+      }
     }
-  }},
+  },
   mounted() {
     this.initMap();
-    this.initLayers();
+    this.map.on('locationfound', this.onLocationFound);
+    this.map.on('locationerror', this.onLocationError);
+    
   },
   methods: {
+    onLocationFound(e) {
+      if ((this.myLocation.lat != e.latitude || this.myLocation.lng != e.longitude) && this.name){
+      console.log(e)
+      this.myLocation = e.latlng
+      this.$socket.client.emit("updatePlayerLocation",{ "name": this.name, "lat": e.latitude, "lon": e.longitude})
+      }
+      },
+    onLocationError(e) {
+    alert(e.message);
+    },
+    clearRaspiPlayers() {
+      this.$socket.client.emit("clearPlayers", {})
+    },
     initMap() {
-      this.map = L.map("map").setView([52.428128, 14.355294], 17);
-      this.tileLayer = L.tileLayer(
+      // this.map = Leaflet.map("map").setView([52.428128, 14.355294], 17);
+      this.map = Leaflet.map("map").setView([52.3915219576082, 13.273095614284891], 17);
+      this.map.locate({ watch: true, maxZoom: 20});
+      this.tileLayer = Leaflet.tileLayer(
         "https://cartodb-basemaps-{s}.global.ssl.fastly.net/rastertiles/voyager/{z}/{x}/{y}.png",
         {
           maxZoom: 20,
-          attribution:
-            '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attribution">CARTO</a>'
+          minZoom: 13
         }
       );
       this.tileLayer.addTo(this.map);
-    },
-    initLayers() {
-      this.layers.forEach(layer => {
-        const markerFeatures = layer.features.filter(
-          feature => feature.type === "marker"
-        );
-        const polygonFeatures = layer.features.filter(
-          feature => feature.type === "polygon"
-        );
-        markerFeatures.forEach(feature => {
-          feature.leafletObject = L.marker(feature.coords).bindPopup(
-            feature.name
-          );
-        });
-
-        polygonFeatures.forEach(feature => {
-          feature.leafletObject = L.polygon(feature.coords).bindPopup(
-            feature.name
-          );
-        });
-      });
-    },
-    layerChanged(layerId, active) {
-      const layer = this.layers.find(layer => layer.id === layerId);
-      layer.features.forEach(feature => {
-        if (active) {
-          feature.leafletObject.addTo(this.map);
-        } else {
-          feature.leafletObject.removeFrom(this.map);
-        }
-        /* Show or hide the feature depending on the active argument */
-      });
     }
   }
 };
@@ -140,4 +99,5 @@ export default {
 .map {
   height: 600px;
 }
+
 </style>
